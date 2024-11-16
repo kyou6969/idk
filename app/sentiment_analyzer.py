@@ -6,14 +6,18 @@ import numpy as np
 import aiohttp
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Tuple, Union
 from fastapi import HTTPException
+from .config import settings, SENTIMENT_CONFIG
 from .models import (
     EmotionWeight,
     AcousticFeatures,
     DetailedSentimentResponse,
-    SentimentResponse
+    SentimentResponse,
+    ComparisonResult,
+    SentimentTrend,
+    RealTimeAnalysis
 )
 
 # 配置日志
@@ -26,6 +30,12 @@ logger = logging.getLogger(__name__)
 
 class SentimentAnalyzer:
     def __init__(self):
+        self.API_KEY = settings.BAIDU_API_KEY
+        self.SECRET_KEY = settings.BAIDU_SECRET_KEY
+        self.TOKEN_URL = settings.BAIDU_TOKEN_URL
+        self.SENTIMENT_URL = settings.BAIDU_SENTIMENT_URL
+        self.ASR_URL = settings.BAIDU_ASR_URL
+
         # API 配置
         self.API_KEY = "nI8a6PreTcBcVmjEdhbBCqEK"
         self.SECRET_KEY = "kwGUqAm3F87ieBWO4EHtsvIL1LFAs5NU"
@@ -47,7 +57,8 @@ class SentimentAnalyzer:
             'total_requests': 0,
             'processing_times': [],
             'sentiment_counts': {0: 0, 1: 0, 2: 0},
-            'emotion_counts': {}
+            'emotion_counts': {},
+            'last_sentiment': 1  # 用于实时分析
         }
 
         logger.info("Initialized Chinese Sentiment Analysis API v2.0.0")
@@ -156,21 +167,19 @@ class SentimentAnalyzer:
             # 计算能量特征
             energy = float(np.square(audio_array).mean()) / (32768.0 ** 2)
 
-            # 简单的音高估计（这里只是示例，实际应该使用更复杂的算法）
+            # 简单的音高估计
             pitch = 0.0
             if len(audio_array) >= rate:
-                # 使用简单的过零率作为音高特征
                 zero_crossings = np.where(np.diff(np.signbit(audio_array)))[0]
                 if len(zero_crossings) > 0:
                     pitch = float(len(zero_crossings)) * rate / (2 * len(audio_array))
 
-            # 计算语速特征（基于音频长度和能量变化）
+            # 计算语速特征
             duration = len(audio_array) / rate
             speed = float(np.sum(np.abs(np.diff(audio_array)) > 1000)) / duration / rate
 
             # 计算节奏特征
             if len(audio_array) >= rate:
-                # 使用能量包络的变化率作为节奏特征
                 envelope = np.abs(audio_array).reshape(-1, rate).mean(axis=1)
                 rhythm = float(np.std(envelope)) / 32768.0
             else:
@@ -314,7 +323,6 @@ class SentimentAnalyzer:
 
     async def _analyze_sentences(self, text: str) -> List[Dict[str, Union[str, float]]]:
         """分句分析"""
-        # 简单的分句
         sentences = [s.strip() for s in text.split('。') if s.strip()]
         results = []
 
@@ -334,6 +342,194 @@ class SentimentAnalyzer:
                 continue
 
         return results
+
+    async def compare_text_and_audio(
+            self,
+            text: str,
+            audio_data: bytes,
+            format: str,
+            rate: int
+    ) -> ComparisonResult:
+        """比较文本和语音的情感分析结果"""
+        try:
+            # 分析文本
+            text_result = await self.analyze_sentiment(text)
+
+            # 分析音频
+            audio_result = await self.process_audio(audio_data, format, rate)
+
+            # 计算差异
+            comparison = await self._calculate_comparison(text_result, audio_result)
+
+            # 生成结论
+            conclusion = await self._generate_comparison_conclusion(
+                text_result,
+                audio_result,
+                comparison
+            )
+
+            return ComparisonResult(
+                text_analysis=text_result,
+                audio_analysis=audio_result,
+                comparison=comparison,
+                conclusion=conclusion,
+                timestamp=datetime.now().isoformat()
+            )
+
+        except Exception as e:
+            logger.error(f"Comparison analysis error: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def _calculate_comparison(
+            self,
+            text_result: DetailedSentimentResponse,
+            audio_result: DetailedSentimentResponse
+    ) -> Dict:
+        """计算文本和语音分析结果的差异"""
+        return {
+            "sentiment_difference": {
+                "value": abs(text_result.sentiment - audio_result.sentiment),
+                "description": "情感极性差异"
+            },
+            "confidence_difference": {
+                "value": abs(text_result.confidence - audio_result.confidence),
+                "description": "置信度差异"
+            },
+            "emotion_correlation": {
+                "text_emotions": [e.emotion for e in text_result.emotion_weights],
+                "audio_emotions": [e.emotion for e in audio_result.emotion_weights],
+                "common_emotions": list(
+                    set([e.emotion for e in text_result.emotion_weights]) &
+                    set([e.emotion for e in audio_result.emotion_weights])
+                )
+            },
+            "acoustic_analysis": {
+                "energy_level": "高" if audio_result.acoustic_features.energy > 0.7 else "中" if audio_result.acoustic_features.energy > 0.3 else "低",
+                "speed_indication": "快速" if audio_result.acoustic_features.speed > 1.2 else "正常" if audio_result.acoustic_features.speed > 0.8 else "缓慢",
+                "pitch_variation": "显著" if audio_result.acoustic_features.pitch > 200 else "适中" if audio_result.acoustic_features.pitch > 150 else "平缓"
+            }
+        }
+
+    async def _generate_comparison_conclusion(
+            self,
+            text_result: DetailedSentimentResponse,
+            audio_result: DetailedSentimentResponse,
+            comparison: Dict
+    ) -> str:
+        """生成对比分析结论"""
+        conclusions = []
+
+        # 情感极性对比
+        if text_result.sentiment == audio_result.sentiment:
+            conclusions.append("文本和语音表达的情感极性一致")
+        else:
+            conclusions.append(
+                f"文本显示{'积极' if text_result.sentiment == 2 else '消极' if text_result.sentiment == 0 else '中性'}情感，"
+                f"而语音显示{'积极' if audio_result.sentiment == 2 else '消极' if audio_result.sentiment == 0 else '中性'}情感"
+            )
+
+        # 情感强度对比
+        text_intensity = text_result.positive_prob if text_result.sentiment == 2 else text_result.negative_prob
+        audio_intensity = audio_result.positive_prob if audio_result.sentiment == 2 else audio_result.negative_prob
+
+        if abs(text_intensity - audio_intensity) > 0.2:
+            conclusions.append(
+                f"{'文本' if text_intensity > audio_intensity else '语音'}表现出更强的情感强度"
+            )
+
+        # 声学特征分析
+        if audio_result.acoustic_features:
+            af = audio_result.acoustic_features
+            if af.energy > 0.7:
+                conclusions.append("语音情感表达较为强烈")
+            if af.speed > 1.2:
+                conclusions.append("语速较快，可能表示紧张或兴奋")
+            elif af.speed < 0.8:
+                conclusions.append("语速较慢，可能表示犹豫或沮丧")
+
+        return "；".join(conclusions)
+
+    async def analyze_sentiment_trend(
+            self,
+            texts: List[str],
+            time_window: str = "hour"
+    ) -> SentimentTrend:
+        """分析情感趋势"""
+        try:
+            results = []
+            for text in texts:
+                sentiment_result = await self.analyze_sentiment(text)
+                results.append(sentiment_result)
+
+            # 计算趋势数据
+            data_points = []
+            current_time = datetime.now()
+
+            for i, result in enumerate(results):
+                time_offset = i * (3600 if time_window == "hour" else 86400)
+                data_points.append({
+                    "timestamp": (current_time - timedelta(seconds=time_offset)).isoformat(),
+                    "sentiment": result.sentiment,
+                    "volume": 1
+                })
+
+            # 计算趋势摘要
+            average_sentiment = sum(r.sentiment for r in results) / len(results)
+            trend_direction = "上升" if results[-1].sentiment > results[0].sentiment else "下降" if results[
+                                                                                                        -1].sentiment < \
+                                                                                                    results[
+                                                                                                        0].sentiment else "平稳"
+
+            return SentimentTrend(
+                period=time_window,
+                data_points=data_points,
+                summary={
+                    "average_sentiment": average_sentiment,
+                    "trend_direction": trend_direction,
+                    "peak_time": max(data_points, key=lambda x: x["sentiment"])["timestamp"]
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Trend analysis error: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def analyze_real_time(
+            self,
+            text: Optional[str] = None,
+            audio_data: Optional[bytes] = None,
+            format: str = "wav",
+            rate: int = 16000
+    ) -> RealTimeAnalysis:
+        """实时分析文本或语音"""
+        try:
+            current_result = None
+            if text:
+                current_result = await self.analyze_sentiment(text)
+            elif audio_data:
+                current_result = await self.process_audio(audio_data, format, rate)
+
+            if not current_result:
+                raise ValueError("Must provide either text or audio data")
+
+            # 计算情感变化
+            previous_sentiment = self.stats.get('last_sentiment', current_result.sentiment)
+            sentiment_change = current_result.sentiment - previous_sentiment
+
+            # 更新最后的情感值
+            self.stats['last_sentiment'] = current_result.sentiment
+
+            return RealTimeAnalysis(
+                current_sentiment=current_result.sentiment,
+                sentiment_change=sentiment_change,
+                active_emotions=[e.emotion for e in current_result.emotion_weights],
+                acoustic_status=current_result.acoustic_features.dict() if current_result.acoustic_features else None,
+                timestamp=datetime.now().isoformat()
+            )
+
+        except Exception as e:
+            logger.error(f"Real-time analysis error: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
 
     def _update_stats(self, result: SentimentResponse, processing_time: float):
         """更新统计数据"""

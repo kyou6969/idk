@@ -206,6 +206,50 @@ class BatchResponse(BaseModel):
         example="2024-11-16T15:50:00.123456"
     )
 
+class ComparisonResult(BaseModel):
+    """文本和语音对比结果模型"""
+    text_analysis: DetailedSentimentResponse = Field(
+        ...,
+        description="文本分析结果"
+    )
+    audio_analysis: DetailedSentimentResponse = Field(
+        ...,
+        description="语音分析结果"
+    )
+    comparison: Dict[str, any] = Field(
+        ...,
+        description="对比分析结果",
+        example={
+            "sentiment_difference": {
+                "value": 0.5,
+                "description": "情感极性差异"
+            },
+            "confidence_difference": {
+                "value": 0.1,
+                "description": "置信度差异"
+            },
+            "emotion_correlation": {
+                "text_emotions": ["喜悦", "满意"],
+                "audio_emotions": ["喜悦", "兴奋"],
+                "common_emotions": ["喜悦"]
+            },
+            "acoustic_analysis": {
+                "energy_level": "高",
+                "speed_indication": "快速",
+                "pitch_variation": "显著"
+            }
+        }
+    )
+    conclusion: str = Field(
+        ...,
+        description="对比分析结论",
+        example="文本和语音情感基本一致，但语音表现出更强的情感强度"
+    )
+    timestamp: str = Field(
+        default_factory=lambda: datetime.now().isoformat(),
+        description="分析时间戳"
+    )
+
 class ErrorResponse(BaseModel):
     """错误响应模型"""
     error: str = Field(
@@ -224,7 +268,6 @@ class ErrorResponse(BaseModel):
         example="2024-11-16T15:50:00.123456"
     )
 
-# 用于WebSocket实时分析的模型
 class WSRequest(BaseModel):
     """WebSocket请求模型"""
     type: str = Field(
@@ -289,4 +332,89 @@ class AnalysisStatistics(BaseModel):
     update_time: str = Field(
         default_factory=lambda: datetime.now().isoformat(),
         description="统计更新时间"
+    )
+
+class SentimentTrend(BaseModel):
+    """情感趋势分析模型"""
+    period: str = Field(
+        ...,
+        description="统计周期",
+        example="hourly"
+    )
+    data_points: List[Dict[str, Union[str, float]]] = Field(
+        ...,
+        description="趋势数据点",
+        example=[
+            {
+                "timestamp": "2024-11-16T14:00:00",
+                "sentiment": 1.8,
+                "volume": 120
+            }
+        ]
+    )
+    summary: Dict[str, any] = Field(
+        ...,
+        description="趋势总结",
+        example={
+            "average_sentiment": 1.5,
+            "trend_direction": "上升",
+            "peak_time": "2024-11-16T15:00:00"
+        }
+    )
+
+class RealTimeAnalysis(BaseModel):
+    """实时分析结果模型"""
+    current_sentiment: float = Field(
+        ...,
+        description="当前情感值",
+        example=1.8
+    )
+    sentiment_change: float = Field(
+        ...,
+        description="情感变化值",
+        example=0.2
+    )
+    active_emotions: List[str] = Field(
+        ...,
+        description="当前活跃的情感",
+        example=["喜悦", "期待"]
+    )
+    acoustic_status: Optional[Dict[str, float]] = Field(
+        None,
+        description="实时声学特征状态"
+    )
+    timestamp: str = Field(
+        default_factory=lambda: datetime.now().isoformat(),
+        description="分析时间戳"
+    )
+
+class APIUsageStats(BaseModel):
+    """API使用统计模型"""
+    total_calls: int = Field(
+        ...,
+        description="总调用次数"
+    )
+    text_analysis_count: int = Field(
+        ...,
+        description="文本分析次数"
+    )
+    audio_analysis_count: int = Field(
+        ...,
+        description="语音分析次数"
+    )
+    comparison_count: int = Field(
+        ...,
+        description="对比分析次数"
+    )
+    average_response_time: float = Field(
+        ...,
+        description="平均响应时间"
+    )
+    error_rate: float = Field(
+        ...,
+        description="错误率"
+    )
+    peak_usage_time: str = Field(
+        ...,
+        description="峰值使用时间"
     )
