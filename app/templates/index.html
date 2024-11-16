@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中文情感分析系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">中文情感分析系统</h1>
+            <p class="text-gray-600 mt-2">基于深度学习的文本情感分析</p>
+        </header>
+
+        <div class="max-w-4xl mx-auto">
+            <!-- 单文本分析 -->
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">单条文本分析</h2>
+                <div class="mb-4">
+                    <textarea id="singleText"
+                              class="w-full h-32 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                              placeholder="请输入要分析的文本..."></textarea>
+                </div>
+                <button onclick="analyzeSingle()"
+                        class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg">
+                    分析
+                </button>
+                <div id="singleResult" class="mt-4 hidden">
+                    <h3 class="font-semibold mb-2">分析结果：</h3>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <p>情感倾向：<span id="sentiment" class="font-medium"></span></p>
+                        <p>情感分数：<span id="score" class="font-medium"></span></p>
+                        <p>情感强度：<span id="intensity" class="font-medium"></span></p>
+                        <div id="details" class="mt-2">
+                            <p class="font-medium">详细分析：</p>
+                            <div id="detailsContent" class="ml-4"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 批量分析 -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-semibold mb-4">批量文本分析</h2>
+                <div class="mb-4">
+                    <textarea id="batchText"
+                              class="w-full h-48 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                              placeholder="请输入要分析的文本，每行一条..."></textarea>
+                </div>
+                <button onclick="analyzeBatch()"
+                        class="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg">
+                    批量分析
+                </button>
+                <div id="batchResult" class="mt-4 hidden">
+                    <h3 class="font-semibold mb-2">批量分析结果：</h3>
+                    <div id="batchResultContent" class="space-y-4"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
+        <div class="bg-white p-4 rounded-lg">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+            <p class="text-center mt-2">分析中...</p>
+        </div>
+    </div>
+
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

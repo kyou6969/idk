@@ -1,0 +1,7 @@
+{
+    "host": "127.0.0.1",
+    "port": 8000,
+    "auto_open_browser": true,
+    "environment": "development",
+    "last_run": null
+}
